@@ -1,7 +1,9 @@
 package ru.endrysan.java.task_tracker_server;
 
 import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
@@ -21,6 +23,10 @@ public class Server {
         ServerSocket server = null;
         BufferedInputStream bis = null;
         ObjectInputStream ois = null;
+        
+        BufferedOutputStream bos = null;
+        ObjectOutputStream oos = null;
+        
         List<User> listUser = new ArrayList<User>();
         
         try{
@@ -29,6 +35,9 @@ public class Server {
             bis = new BufferedInputStream(client.getInputStream());
             ois = new ObjectInputStream(bis);
             User user = (User) ois.readObject();
+            
+            bos = new BufferedOutputStream(client.getOutputStream());
+            oos = new ObjectOutputStream(bos);
 //            System.out.println(user.getLogin());
 //            System.out.println(user.getPassword());
             UserDAO userdao = new UserDAO();
@@ -38,7 +47,7 @@ public class Server {
                     userdao.save(user);
                 }
                 else {
-                    // logged and open workplace
+                    oos.writeObject(Boolean.TRUE);
                 }
             }
             
