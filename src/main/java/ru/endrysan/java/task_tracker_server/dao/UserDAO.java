@@ -4,85 +4,98 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.ArrayList;
-import java.util.List;
 
 import org.apache.commons.dbutils.DbUtils;
+import org.apache.log4j.Logger;
 
 import ru.endrysan.java.task_tracker_client.model.User;
 
 public class UserDAO {
-    
-    private String user = "sa";
-    private String password = "";
-    private String url = "jdbc:h2:~/test";
-    private String driver = "org.h2.Driver";
-    
+
+    private static final String USER = "sa";
+    private static final String PASSWORD = "";
+    private static final String URL = "jdbc:h2:~/test";
+    private static final String DRIVER = "org.h2.Driver";
+
+    private static final Logger LOG = Logger.getLogger(UserDAO.class);
+
     public UserDAO() {
        try {
-            Class.forName(driver);
+            Class.forName(DRIVER);
+            init();
        } catch (ClassNotFoundException e) {
-            e.printStackTrace();
+            LOG.fatal(e);
        }
     }
-    
-    public void save(User newUser) {
-        
+
+    public synchronized boolean save(User newUser) {
        Connection connection = null;
        PreparedStatement statement = null;
-       ResultSet resultSet = null;
        try{
-            connection = DriverManager.getConnection(url, user, password);
-            statement = connection.prepareStatement("insert into user values(default, '?', '?')");
+            connection = getConnection();
+            statement = connection.prepareStatement("insert into user values(default, ?, ?)");
             statement.setString(1, newUser.getLogin());
             statement.setString(2, newUser.getPassword());
-            resultSet = statement.executeQuery();
+            statement.executeUpdate();
+            return true;
        } catch(Exception e){
-            e.printStackTrace();
+            LOG.error(e, e);
        }
        finally{
            DbUtils.closeQuietly(connection);
            DbUtils.closeQuietly(statement);
-           DbUtils.closeQuietly(resultSet);
        }
+       return false;
     }
-    
-    public List<User> getAll() {
-        
-        List<User> listUser = new ArrayList<User>();
-        Connection connection = null;
-        Statement statement = null;
+
+    public synchronized User getUser(String login) {
+        Connection con = null;
+        PreparedStatement prst = null;
         ResultSet resultSet = null;
-        try{
-             connection = DriverManager.getConnection(url, user, password);
-             statement = connection.createStatement();
-             resultSet = statement.executeQuery("select * from user");
-             while(resultSet.next()){
-                 User newUser = new User();
-                 newUser.setId(resultSet.getInt("id"));
-                 newUser.setLogin(resultSet.getString("Login"));
-                 newUser.setPassword(resultSet.getString("Password"));
-                 listUser.add(newUser);
-             }
-        } catch(Exception e){
-             e.printStackTrace();
-        }
-        finally{
-            DbUtils.closeQuietly(connection);
-            DbUtils.closeQuietly(statement);
+        try {
+            con = getConnection();
+            prst = con.prepareStatement("select * from user where login = ?");
+            prst.setString(1, login);
+            resultSet = prst.executeQuery();
+            if (resultSet.next()) {
+                User user = new User();
+                user.setId(resultSet.getInt("id"));
+                user.setLogin(resultSet.getString("login"));
+                user.setPassword(resultSet.getString("pass"));
+                return user;
+            }
+        } catch (SQLException e) {
+            LOG.error(e);
+        } finally {
             DbUtils.closeQuietly(resultSet);
+            DbUtils.closeQuietly(prst);
+            DbUtils.closeQuietly(con);
         }
-        return listUser;
+        return null;
     }
-    public static void main(String[] args) {
-        UserDAO ud = new UserDAO();
-        List<User> list = new ArrayList<User>();
-        list.addAll(ud.getAll());
-        for (User u: list) {
-            System.out.println(u.getId() + " " + u.getLogin() + " " + u.getPassword());
+
+    private void init() {
+        Connection con = null;
+        Statement st = null;
+        try {
+            con = getConnection();
+            st = con.createStatement();
+            st.execute("CREATE TABLE IF NOT EXISTS USER ("
+                     + " ID INT PRIMARY KEY AUTO_INCREMENT,"
+                     + " LOGIN VARCHAR(255) NOT NULL,"
+                     + " PASS VARCHAR(255))");
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        } finally {
+            DbUtils.closeQuietly(st);
+            DbUtils.closeQuietly(con);
         }
     }
-    
+
+    private synchronized Connection getConnection() throws SQLException {
+        return DriverManager.getConnection(URL, USER, PASSWORD);
+    }
 
 }
